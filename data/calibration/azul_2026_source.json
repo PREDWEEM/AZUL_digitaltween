@@ -1,0 +1,31 @@
+{
+  "uploaded_filename": "VALIDA (1).xlsx",
+  "uploaded_sha256": "c793fc43b4a20fe5a38c4b937836bc1111df34602dd2935f1b178ce1bee91d3d",
+  "original_file": "azul_2026_original.xlsx",
+  "sheet": "Hoja1",
+  "site_assigned_by_user": "Azul",
+  "units": "plantas/m² por intervalo entre conteos",
+  "initial_zero_reference": "2026-03-01",
+  "weather_repository": "https://github.com/PREDWEEM/LOLIUM_AZUL2026",
+  "weather_commit": "f60de7d5c5c82f2e202eea9f5b1d409b98742ff9",
+  "weather_source_path": "meteo_daily.csv",
+  "weather_source_sha256": "3002bcf28a486f87a1811c75f1616cf687f7500767835e877dc384199a2ee207",
+  "weather_start": "2026-01-01",
+  "weather_end": "2026-09-01",
+  "weather_rows": 244,
+  "weather_nature": "Reanálisis ERA5 utilizado como respaldo de ERA5-Land; no son observaciones de estación",
+  "weather_coordinates": {
+    "latitude": -36.87,
+    "longitude": -59.89
+  },
+  "model_coordinates": {
+    "latitude": -36.87,
+    "longitude": -59.89
+  },
+  "validation_cutoffs": [
+    "2026-06-17",
+    "2026-07-16",
+    "2026-07-27",
+    "2026-08-15"
+  ]
+}

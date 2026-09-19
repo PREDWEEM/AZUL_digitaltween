@@ -1,0 +1,98 @@
+name: Actualizar Datos Meteorológicos Azul
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    # 07:30 y 15:30 de Argentina (UTC-3)
+    - cron: '30 10 * * *'
+    - cron: '30 18 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clima-azul-twin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  actualizar-datos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas requests
+
+      - name: Verificar recuperación tras interrupciones
+        run: python -m unittest test_actualizar_clima.py
+
+      - name: Actualizar ERA5-Land y ECMWF IFS
+        run: python actualizar_clima.py
+
+      - name: Validar la serie generada
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from actualizar_clima import FECHA_FIN
+
+          archivo = 'meteo_daily.csv'
+          df = pd.read_csv(archivo)
+          requeridas = {
+              'Fecha', 'TMAX', 'TMIN', 'Prec',
+              'FUENTE', 'TIPO', 'FECHA_EMISION'
+          }
+          faltantes = requeridas.difference(df.columns)
+          if faltantes:
+              raise SystemExit(f'Faltan columnas: {sorted(faltantes)}')
+
+          df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+          if df['Fecha'].isna().any():
+              raise SystemExit('Hay fechas inválidas.')
+          if (df['Fecha'].dt.date > FECHA_FIN).any():
+              raise SystemExit('Hay fechas posteriores al 1 de octubre de 2026.')
+          if df['Fecha'].duplicated().any():
+              raise SystemExit('Hay fechas duplicadas.')
+          if df[['TMAX', 'TMIN', 'Prec']].isna().any().any():
+              raise SystemExit('Hay datos meteorológicos nulos.')
+          if (df['TMAX'] < df['TMIN']).any():
+              raise SystemExit('Se detectó TMAX menor que TMIN.')
+          if (df['Prec'] < 0).any():
+              raise SystemExit('Se detectó precipitación negativa.')
+
+          esperadas = pd.date_range(df['Fecha'].min(), df['Fecha'].max(), freq='D')
+          faltan_fechas = esperadas.difference(pd.DatetimeIndex(df['Fecha']))
+          if len(faltan_fechas):
+              raise SystemExit(f'La serie tiene {len(faltan_fechas)} días faltantes.')
+
+          print(df.groupby(['FUENTE', 'TIPO']).size())
+          print(df.tail(10).to_string(index=False))
+          PY
+
+      - name: Guardar actualización meteorológica
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add meteo_daily.csv
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios meteorológicos para guardar."
+            exit 0
+          fi
+
+          git commit -m "Actualización programada: Clima Azul (ERA5-Land + ECMWF IFS)"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

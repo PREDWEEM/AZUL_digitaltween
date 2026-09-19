@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "method": "monotone_logit_v1",
+  "profile_id": "azul-2026-09-01-v1-49a767e15d",
+  "site": "Azul",
+  "status": "experimental_una_campana",
+  "training_year": 2026,
+  "training_through": "2026-09-01",
+  "available_from": "2026-09-01",
+  "season_complete": false,
+  "first_interval_excluded": true,
+  "parameters": {
+    "offset": -0.2999999999999998,
+    "slope": 0.675
+  },
+  "fit": {
+    "n_observations": 11,
+    "n_intervals": 10,
+    "observed_window_total_plm2": 8224.0,
+    "rmse_base_plm2": 548.7681768050933,
+    "rmse_calibrated_plm2": 373.72029994225926,
+    "weighted_mse_base": 4.0914594346287005,
+    "weighted_mse_calibrated": 1.8975524540812043,
+    "regularization": 0.05,
+    "nuisance_scale_base": 8227.610073807897,
+    "nuisance_scale_calibrated": 8284.119271226962,
+    "parameter_at_bound": false
+  },
+  "observations_start": "2026-03-01",
+  "initial_zero_reference": true,
+  "model_fingerprint": "bacaf1b41a67b7f83966c4d9addb1bee0190ddab3d4ebe11ff7a0a1b6d58464f",
+  "model_parameters": {
+    "cobertura_pct": 10.0,
+    "w_max": 18.81,
+    "umbral_termoinhibicion": 24.0,
+    "umbral_choque_hidrico": 45.0,
+    "exponente_kr": 0.0,
+    "latitud": -36.87,
+    "longitud": -59.89,
+    "latencia_jd": 25,
+    "techo_choque": 0.75,
+    "calentamiento_suelo": 0.0,
+    "umbral_primer_pico": 0.2,
+    "t_base": 2.0,
+    "t_opt": 20.0,
+    "t_crit": 30.0,
+    "tt_control": 600.0,
+    "tt_limite": 800.0,
+    "decay_enabled": true,
+    "decay_tau_days": 60.0,
+    "decay_beta": 1.0,
+    "decay_intensity": 0.75,
+    "decay_cap_fraction": 0.5
+  },
+  "seasonal_reference": {
+    "include_patterns": [],
+    "excluded_years": [
+      "2010",
+      "2015"
+    ],
+    "scope": "Referencia compartida; sin campaña histórica identificada como Azul",
+    "n_campaigns": 11,
+    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, test -emerel tresas 2025.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx"
+  },
+  "source": {
+    "uploaded_filename": "VALIDA (1).xlsx",
+    "uploaded_sha256": "c793fc43b4a20fe5a38c4b937836bc1111df34602dd2935f1b178ce1bee91d3d",
+    "original_file": "azul_2026_original.xlsx",
+    "sheet": "Hoja1",
+    "site_assigned_by_user": "Azul",
+    "units": "plantas/m² por intervalo entre conteos",
+    "initial_zero_reference": "2026-03-01",
+    "weather_repository": "https://github.com/PREDWEEM/LOLIUM_AZUL2026",
+    "weather_commit": "f60de7d5c5c82f2e202eea9f5b1d409b98742ff9",
+    "weather_source_path": "meteo_daily.csv",
+    "weather_source_sha256": "3002bcf28a486f87a1811c75f1616cf687f7500767835e877dc384199a2ee207",
+    "weather_start": "2026-01-01",
+    "weather_end": "2026-09-01",
+    "weather_rows": 244,
+    "weather_nature": "Reanálisis ERA5 utilizado como respaldo de ERA5-Land; no son observaciones de estación",
+    "weather_coordinates": {
+      "latitude": -36.87,
+      "longitude": -59.89
+    },
+    "model_coordinates": {
+      "latitude": -36.87,
+      "longitude": -59.89
+    },
+    "validation_cutoffs": [
+      "2026-06-17",
+      "2026-07-16",
+      "2026-07-27",
+      "2026-08-15"
+    ],
+    "observations_file": "azul_2026_counts.csv",
+    "observations_sha256": "11b399ac9e29f144228cc9adc8489317519329bba5bb3a6355ecff0f6a985daa",
+    "weather_file": "azul_2026_weather.csv",
+    "weather_sha256": "6c4c33773839f0c27b37586aa385929f2d2187d098cdfbb561aa8ed6a966e2fc",
+    "weather_types": {
+      "REANALISIS_FALLBACK": 244
+    },
+    "observed_total_plm2": 8224.0,
+    "replicate_count": null,
+    "replicate_conversion_factor": null
+  },
+  "validation": {
+    "kind": "hindcast_condicional_con_meteorologia_realizada",
+    "independent_season": false,
+    "n_intervals": 4,
+    "note": "Ajuste con datos hasta cada corte y evaluación del siguiente intervalo. Se utiliza reanálisis meteorológico histórico ERA5, no la emisión de pronóstico disponible en cada corte. No demuestra transferencia a otra campaña ni precisión operativa a siete días.",
+    "rmse_base_plm2": 203.05735570798927,
+    "rmse_calibrated_plm2": 367.2067413129747,
+    "intervals_improved": 1
+  },
+  "limitations": [
+    "Una sola campaña incompleta. No se estima ni transfiere un total estacional.",
+    "El registro inicial de cero del 2026-03-01 delimita el primer intervalo; no se infiere ausencia de emergencia en fechas anteriores.",
+    "Cobertura de 10 % y Wmax de 18.81 mm son supuestos de la configuración operativa; el archivo no informa manejo ni cobertura.",
+    "El archivo FECHA + PLM2 no incluye repeticiones. Se utiliza un piso de ponderación común, no un error de muestreo medido.",
+    "Se conserva el techo del 50 % y decaimiento desde el 15/04 del motor Azul. No se incorpora extinción post-pico de otra localidad.",
+    "La referencia estacional es compartida, no una validación histórica local de Azul.",
+    "La meteorología del ajuste es reanálisis ERA5 (244 días); no corresponde a observaciones de una estación local.",
+    "La transformación no crea cohortes en fechas bloqueadas por el motor biofísico.",
+    "Un parámetro en su límite indica que persisten diferencias estructurales.",
+    "El ajuste no reduce automáticamente la incertidumbre de asimilación.",
+    "Los gráficos de la campaña de ajuste son retrospectivos, no predicciones independientes."
+  ]
+}
