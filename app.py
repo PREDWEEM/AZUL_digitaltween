@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from runpy import run_path
 
 import numpy as np
 import pandas as pd
@@ -23,7 +24,6 @@ from predweem_twin.coverage import (
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem
 from predweem_twin.observations import prepare_observations, read_observation_file
 from predweem_twin.scenarios import apply_scenario
-from predweem_twin.seasonal import load_seasonal_reference
 from predweem_twin.state import (
     build_twin_snapshot,
     milestone_dates,
@@ -70,11 +70,27 @@ def load_model():
 
 
 def load_progress_reference():
-    """Recarga la referencia vigente; evita curvas o columnas obsoletas en caché."""
-    return load_seasonal_reference(
+    """Lee la implementación vigente, incluso si Python conserva el módulo anterior.
+
+    Streamlit puede actualizar app.py sin renovar los símbolos importados.
+    Este módulo pequeño se ejecuta desde el archivo en un espacio aislado,
+    sin modificar sys.modules ni las funciones utilizadas por otras sesiones.
+    """
+    implementation = run_path(str(BASE / "predweem_twin" / "seasonal.py"))
+    reference = implementation["load_seasonal_reference"](
         BASE / "models" / "modelo_clusters_k3.pkl",
         excluded_years=("2010", "2015"),
+        excluded_sites=("balcarce", "san pedro"),
     )
+    required = {
+        "Julian_days", "Progreso_P10", "Progreso_Mediano", "Progreso_P90",
+        "N_Campanas", "Campanas", "Campanas_Excluidas",
+    }
+    if reference.empty or not required.issubset(reference.columns):
+        raise ValueError("La referencia estacional no contiene el formato vigente.")
+    if reference["Campanas"].str.contains("balcarce|san pedro|2010|2015", case=False).any():
+        raise ValueError("La referencia estacional contiene campañas excluidas.")
+    return reference
 
 
 def load_store():
@@ -313,7 +329,11 @@ parameters = ModelParameters(
     longitud=float(longitude),
 )
 model = load_model()
-seasonal_reference = load_progress_reference()
+try:
+    seasonal_reference = load_progress_reference()
+except (OSError, KeyError, TypeError, ValueError) as error:
+    st.error(f"No se pudo cargar la referencia estacional vigente: {error}")
+    st.stop()
 reference_campaigns = int(seasonal_reference["N_Campanas"].iloc[0])
 store = load_store()
 coverage_observations = store.coverage_observations(site_id)
