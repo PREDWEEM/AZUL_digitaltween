@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "monotone_logit_v1",
-  "profile_id": "azul-2026-09-01-v1-49a767e15d",
+  "profile_id": "azul-2026-09-01-v1-2a67523a19",
   "site": "Azul",
   "status": "experimental_una_campana",
   "training_year": 2026,
@@ -17,18 +17,18 @@
     "n_observations": 11,
     "n_intervals": 10,
     "observed_window_total_plm2": 8224.0,
-    "rmse_base_plm2": 548.7681768050933,
-    "rmse_calibrated_plm2": 373.72029994225926,
-    "weighted_mse_base": 4.0914594346287005,
-    "weighted_mse_calibrated": 1.8975524540812043,
+    "rmse_base_plm2": 548.7681768050934,
+    "rmse_calibrated_plm2": 372.4512639267187,
+    "weighted_mse_base": 4.091459434628701,
+    "weighted_mse_calibrated": 1.884687357394857,
     "regularization": 0.05,
-    "nuisance_scale_base": 8227.610073807897,
-    "nuisance_scale_calibrated": 8284.119271226962,
+    "nuisance_scale_base": 8229.64770516196,
+    "nuisance_scale_calibrated": 8305.321234647277,
     "parameter_at_bound": false
   },
   "observations_start": "2026-03-01",
   "initial_zero_reference": true,
-  "model_fingerprint": "bacaf1b41a67b7f83966c4d9addb1bee0190ddab3d4ebe11ff7a0a1b6d58464f",
+  "model_fingerprint": "e89ced6f58178c02492f426cec82533ee2425933f45d732b8c77aa046dc44903",
   "model_parameters": {
     "cobertura_pct": 10.0,
     "w_max": 18.81,
@@ -58,9 +58,14 @@
       "2010",
       "2015"
     ],
+    "excluded_sites": [
+      "balcarce",
+      "san pedro"
+    ],
+    "excluded_campaigns": "2015.xlsx, 2010.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx",
     "scope": "Referencia compartida; sin campaña histórica identificada como Azul",
-    "n_campaigns": 11,
-    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, test -emerel tresas 2025.xlsx, emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx"
+    "n_campaigns": 9,
+    "campaigns": "2012.xlsx, 2009.xlsx, 2013.xlsx, 2024.xlsx, 2023.xlsx, 2014.xlsx, 2008.xlsx, 2011.xlsx, test -emerel tresas 2025.xlsx"
   },
   "source": {
     "uploaded_filename": "VALIDA (1).xlsx",
@@ -108,8 +113,8 @@
     "independent_season": false,
     "n_intervals": 4,
     "note": "Ajuste con datos hasta cada corte y evaluación del siguiente intervalo. Se utiliza reanálisis meteorológico histórico ERA5, no la emisión de pronóstico disponible en cada corte. No demuestra transferencia a otra campaña ni precisión operativa a siete días.",
-    "rmse_base_plm2": 203.05735570798927,
-    "rmse_calibrated_plm2": 367.2067413129747,
+    "rmse_base_plm2": 203.05735570798893,
+    "rmse_calibrated_plm2": 315.37978007132097,
     "intervals_improved": 1
   },
   "limitations": [

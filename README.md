@@ -53,13 +53,26 @@ Desde el 15/04 aplica un techo del 50 % del máximo previo, con decaimiento
 2–20–30 °C y la banda de manejo 600–800 °Cd. Modelo y meteorología utilizan
 las coordenadas −36,87, −59,89.
 
-Para series parciales se utiliza una referencia **compartida de 11 campañas**
-del clasificador original, excluyendo 2010 y 2015. No contiene una campaña
+Para series parciales se utiliza una referencia **compartida de nueve campañas**
+del clasificador original, excluyendo 2010, 2015, Balcarce y San Pedro. No contiene una campaña
 histórica identificada como Azul: no constituye una validación histórica local.
 El total observado parcial no se supone igual al potencial estacional completo.
 
 Consulte [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md) para la revisión de origen,
 los hashes y la correspondencia científica.
+
+La selección conserva 2008, 2009, 2011, 2012, 2013, 2014, 2023 y 2024
+(archivos identificados sólo por año), y Tres Arroyos 2025. No se atribuyen
+todas estas series a la localidad del gemelo. Los nombres utilizados y
+excluidos se muestran en Trazabilidad y en el perfil de calibración.
+La referencia se recarga en cada ejecución para evitar curvas o columnas
+obsoletas en la caché de Streamlit.
+
+El perfil 2026 y sus diagnósticos se regeneraron con esta selección, conservando
+los conteos, meteorología fija, fechas de corte, ANN y parámetros fisiológicos.
+Aplicación, escenarios y ajuste utilizan los mismos filtros. El cálculo
+conserva su anclaje a la mediana histórica; esta revisión modifica la selección
+de referencias. Los resultados siguientes corresponden a las nueve curvas.
 
 ## Meteorología y actualización
 
@@ -115,11 +128,11 @@ un piso común de ponderación, no un error de muestreo medido.
 
 | Evaluación | RMSE base | RMSE calibrado |
 |---|---:|---:|
-| Ajuste retrospectivo, 10 intervalos | 548,77 | 373,72 |
-| Evaluación temporal, 4 intervalos posteriores | 203,06 | 367,21 |
+| Ajuste retrospectivo, 10 intervalos | 548,77 | 372,45 |
+| Evaluación temporal, 4 intervalos posteriores | 203,06 | 315,38 |
 
-RMSE en plantas/m² por intervalo. El ajuste retrospectivo mejora un 31,9 %, pero
-**la evaluación temporal empeora un 80,8 %**; mejora sólo uno de cuatro intervalos.
+RMSE en plantas/m² por intervalo. El ajuste retrospectivo mejora un 32,1 %, pero
+**la evaluación temporal empeora un 55,3 %**; mejora sólo uno de cuatro intervalos.
 La interfaz muestra esta limitación junto al gráfico principal y en el detalle
 de calibración. Los cuatro cortes se ajustan sólo con datos disponibles hasta
 cada corte y se evalúa el intervalo siguiente con reanálisis realizado. No son

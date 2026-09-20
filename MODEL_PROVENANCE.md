@@ -47,7 +47,8 @@ modifica el reloj térmico ni los pesos.
 
 ## Referencia estacional
 
-Se utilizan 11 campañas del clasificador original, excluyendo 2010 y 2015.
+Se utilizan nueve campañas del clasificador original, excluyendo 2010, 2015,
+Balcarce y San Pedro.
 No contiene una campaña histórica identificada como Azul. Es una referencia
 compartida, no una validación histórica local. El clasificador no se modifica;
 los nombres de las campañas utilizadas quedan registrados en el perfil JSON.
@@ -73,3 +74,17 @@ Los resultados de ajuste se separan de la evaluación temporal sobre cuatro
 intervalos posteriores. Esta evaluación empeora respecto de la base y se
 informa explícitamente en la interfaz. Se usa reanálisis realizado; no se
 presenta como validación independiente de pronósticos emitidos ni de otra campaña.
+
+## Exclusión de Balcarce y San Pedro
+
+Se excluyen `emererel2025 balcarce.xlsx` y `emrel sp 2025 san pedro.xlsx`
+antes de calcular P10, mediana y P90. El filtro ignora mayúsculas y espacios
+repetidos y exige un nombre por curva. Quedan ocho archivos identificados
+sólo por año (2008, 2009, 2011–2014, 2023 y 2024) y Tres Arroyos 2025.
+La localidad de los ocho archivos no se infiere de sus nombres.
+
+Se regeneran el perfil 2026 y los diagnósticos con los mismos datos y cortes;
+el fingerprint incluye el código de selección. El perfil registra filtros,
+cantidad y nombres incluidos/excluidos. La interfaz recarga la referencia
+en cada ejecución para evitar datos obsoletos de Streamlit. Se conserva el
+mecanismo de anclaje estacional, así como la ANN y la fisiología del sitio.
