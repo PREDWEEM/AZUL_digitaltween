@@ -24,7 +24,7 @@ from predweem_twin.calibration import (  # noqa: E402
 )
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem  # noqa: E402
 from predweem_twin.observations import prepare_observations, read_observation_file  # noqa: E402
-from predweem_twin.seasonal import EXCLUDED_SITES, load_seasonal_reference  # noqa: E402
+from predweem_twin.seasonal import load_local_seasonal_reference  # noqa: E402
 from predweem_twin.weather import read_weather_file, forecast_mask  # noqa: E402
 
 
@@ -51,15 +51,14 @@ def build_calibration(observations_path, weather_path, output_path, site="Azul",
     if forecast_mask(weather).any():
         raise ValueError("La calibración histórica no admite filas de pronóstico.")
     model = PracticalANNModel.from_directory(ROOT / "models")
-    reference = load_seasonal_reference(
-        ROOT / "models/modelo_clusters_k3.pkl", excluded_years=("2010", "2015"),
-    )
+    reference = load_local_seasonal_reference(ROOT, as_of=last_count)
     parameters = ModelParameters(cobertura_pct=coverage, w_max=w_max)
 
     def simulate(cutoff, end=None):
         return run_predweem(
             weather.loc[weather["Fecha"] <= (end if end is not None else cutoff)],
-            model, parameters, normalization_as_of=cutoff, seasonal_reference=reference,
+            model, parameters, normalization_as_of=cutoff,
+            seasonal_reference=load_local_seasonal_reference(ROOT, as_of=cutoff),
         )
 
     trajectory = simulate(last_count)
@@ -73,6 +72,7 @@ def build_calibration(observations_path, weather_path, output_path, site="Azul",
     # corte entran al ajuste. Para evaluar el intervalo siguiente se usa su
     # meteorología realizada: es un hindcast condicional, no pronóstico archivado.
     holdout_rows = []
+    skipped_cutoffs = []
     validation_cutoffs = source_metadata.get("validation_cutoffs")
     if validation_cutoffs:
         counts = []
@@ -87,6 +87,13 @@ def build_calibration(observations_path, weather_path, output_path, site="Azul",
     for count in counts:
         training = prepared.iloc[:count].copy()
         cutoff = pd.Timestamp(training["Fecha"].iloc[-1])
+        cutoff_reference = load_local_seasonal_reference(ROOT, as_of=cutoff)
+        if cutoff_reference["N_Campanas"].iloc[0] == 0:
+            skipped_cutoffs.append({
+                "cutoff": cutoff.date().isoformat(),
+                "reason": "Sin campaña histórica local disponible hasta el corte.",
+            })
+            continue
         target = prepared.iloc[count]
         target_date = pd.Timestamp(target["Fecha"])
         fitted, _ = fit_site_calibration(simulate(cutoff), training, site=site)
@@ -107,16 +114,21 @@ def build_calibration(observations_path, weather_path, output_path, site="Azul",
             "Offset": fitted["parameters"]["offset"],
             "Slope": fitted["parameters"]["slope"],
         })
-    holdout = pd.DataFrame(holdout_rows)
+    holdout = pd.DataFrame(holdout_rows, columns=[
+        "Corte_entrenamiento", "Fecha_evaluacion", "Dias_intervalo", "N_muestreos_ajuste",
+        "Observado_PLM2", "Base_PLM2", "Calibrado_PLM2", "Offset", "Slope",
+    ])
     validation = {
-        "kind": "hindcast_condicional_con_meteorologia_realizada",
+        "kind": "sin_evaluacion_temporal_con_referencia_local_disponible" if holdout.empty else "hindcast_condicional_con_meteorologia_realizada",
+        "skipped_cutoffs": skipped_cutoffs,
         "independent_season": False,
         "n_intervals": len(holdout),
         "note": (
-            "Ajuste con datos hasta cada corte y evaluación del siguiente intervalo. "
-            "Se utiliza reanálisis meteorológico histórico ERA5, "
-            "no la emisión de pronóstico disponible en cada corte. No demuestra "
-            "transferencia a otra campaña ni precisión operativa a siete días."
+            "No se evalúan los cortes anteriores al cierre de Azul 2026 porque no existe "
+            "otra campaña histórica local. Usar su total completo incorporaría información "
+            "futura. Las métricas anteriores con referencia compartida no corresponden a "
+            "este pool exclusivo. El ajuste final es retrospectivo y requiere validación "
+            "en una campaña posterior, con pronósticos meteorológicos archivados."
         ),
     }
     if not holdout.empty:
@@ -143,13 +155,12 @@ def build_calibration(observations_path, weather_path, output_path, site="Azul",
         "model_fingerprint": model_fingerprint(ROOT),
         "model_parameters": asdict(parameters),
         "seasonal_reference": {
-            "include_patterns": [],
-            "excluded_years": ["2010", "2015"],
-            "excluded_sites": list(EXCLUDED_SITES),
-            "excluded_campaigns": reference["Campanas_Excluidas"].iloc[0],
-            "scope": "Referencia compartida; sin campaña histórica identificada como Azul",
+            "scope": "Únicamente Azul 2026; ventana registrada, no campaña completa certificada",
             "n_campaigns": int(reference["N_Campanas"].iloc[0]),
             "campaigns": reference["Campanas"].iloc[0],
+            "years": reference["Campanas_Anos"].iloc[0],
+            "excluded_campaigns": reference["Campanas_Excluidas"].iloc[0],
+            "source_2026": reference.attrs["source_2026"],
         },
         "source": {
             **source_metadata,
@@ -169,7 +180,7 @@ def build_calibration(observations_path, weather_path, output_path, site="Azul",
             f"Cobertura de {coverage:g} % y Wmax de {w_max:g} mm son supuestos de la configuración operativa; el archivo no informa manejo ni cobertura.",
             "El archivo FECHA + PLM2 no incluye repeticiones. Se utiliza un piso de ponderación común, no un error de muestreo medido.",
             "Se conserva el techo del 50 % y decaimiento desde el 15/04 del motor Azul. No se incorpora extinción post-pico de otra localidad.",
-            "La referencia estacional es compartida, no una validación histórica local de Azul.",
+            "La referencia y el ajuste utilizan los mismos conteos de Azul 2026: no son una validación independiente ni estiman variabilidad entre campañas.",
             "La meteorología del ajuste es reanálisis ERA5 (244 días); no corresponde a observaciones de una estación local.",
             "La transformación no crea cohortes en fechas bloqueadas por el motor biofísico.",
             "Un parámetro en su límite indica que persisten diferencias estructurales.",

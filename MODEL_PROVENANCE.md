@@ -5,7 +5,7 @@ revisión `f60de7d5c5c82f2e202eea9f5b1d409b98742ff9`. El repositorio fuente no s
 
 La interfaz, persistencia, asimilación y calibración externa se adaptaron del
 [gemelo Tres Arroyos](https://github.com/PREDWEEM/TREASA_digitaltween/tree/a71235301b2f746f244a5fca5f873d67d8e37949).
-La normalización con referencia compartida utiliza la implementación del
+La versión inicial de normalización compartida se basó en la implementación del
 [gemelo Lartigau](https://github.com/PREDWEEM/larti_digitaltween/tree/b14687448c63c538d28ca17fe58f58ecaf01573b).
 Los activos neuronales, parámetros fisiológicos y meteorología proceden de
 Azul. El perfil de calibración se ajustó con el archivo aportado para Azul.
@@ -47,11 +47,19 @@ modifica el reloj térmico ni los pesos.
 
 ## Referencia estacional
 
-Se utilizan nueve campañas del clasificador original, excluyendo 2010, 2015,
-Balcarce y San Pedro.
-No contiene una campaña histórica identificada como Azul. Es una referencia
-compartida, no una validación histórica local. El clasificador no se modifica;
-los nombres de las campañas utilizadas quedan registrados en el perfil JSON.
+Desde la revisión del 22/09/2026 se utiliza exclusivamente
+`data/calibration/azul_2026_counts.csv`, con 11 fechas del 01/03 al 01/09/2026
+y 8.224 plantas/m². Se divide el acumulado por el total registrado y se
+interpola dentro de esa ventana. La app no lee curvas ni ejes del clasificador
+para normalizar; éste se conserva como activo original excluido.
+
+El total sólo está disponible desde el último conteo. Sin una campaña previa,
+los cortes anteriores no se pueden evaluar con un histórico local conocido.
+P10, mediana y P90 son la misma curva; no cuantifican variabilidad interanual.
+Fuera de marzo–septiembre el gráfico no inventa una referencia. Después del
+último conteo, el motor conserva el total como supuesto de normalización;
+no implica cierre biológico. La calibración fue recalculada con esa fuente.
+Su huella incluye el CSV local y ya no depende del clasificador excluido.
 
 ## Meteorología y calibración
 
@@ -70,21 +78,19 @@ se asigna por la instrucción del usuario.
 
 El origen, revisión, coordenadas y hashes están en
 `data/calibration/azul_2026_source.json` y en el perfil JSON.
-Los resultados de ajuste se separan de la evaluación temporal sobre cuatro
-intervalos posteriores. Esta evaluación empeora respecto de la base y se
-informa explícitamente en la interfaz. Se usa reanálisis realizado; no se
-presenta como validación independiente de pronósticos emitidos ni de otra campaña.
+El ajuste final es retrospectivo. Los cuatro cortes anteriores al 01/09/2026
+se registran como no evaluables: no había otra campaña local disponible y
+usar el total de 2026 filtraría información futura. La evaluación anterior
+con referencia compartida no se muestra como resultado del pool exclusivo.
 
-## Exclusión de Balcarce y San Pedro
+## Exclusividad y actualización
 
-Se excluyen `emererel2025 balcarce.xlsx` y `emrel sp 2025 san pedro.xlsx`
-antes de calcular P10, mediana y P90. El filtro ignora mayúsculas y espacios
-repetidos y exige un nombre por curva. Quedan ocho archivos identificados
-sólo por año (2008, 2009, 2011–2014, 2023 y 2024) y Tres Arroyos 2025.
-La localidad de los ocho archivos no se infiere de sus nombres.
+Sólo se lee `azul_2026_counts.csv` para construir el pool. Modificar o retirar
+las curvas del clasificador no altera el histórico, su flujo ni el máximo
+semanal usado en la intensidad. Los nombres excluidos quedan documentados.
+La interfaz ejecuta el cargador vigente en cada recálculo para evitar curvas
+o columnas obsoletas durante una actualización de Streamlit.
 
-Se regeneran el perfil 2026 y los diagnósticos con los mismos datos y cortes;
-el fingerprint incluye el código de selección. El perfil registra filtros,
-cantidad y nombres incluidos/excluidos. La interfaz recarga la referencia
-en cada ejecución para evitar datos obsoletos de Streamlit. Se conserva el
-mecanismo de anclaje estacional, así como la ANN y la fisiología del sitio.
+La huella del perfil incorpora el CSV local y el código de normalización.
+Se mantienen intactos los pesos neuronales y las funciones fisiológicas,
+el techo y decaimiento propios de Azul y su meteorología operativa.

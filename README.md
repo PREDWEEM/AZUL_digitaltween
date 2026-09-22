@@ -45,9 +45,13 @@ Si ocurre lo último, vuelva a habilitar el workflow desde Actions.
 
 ## Funcionamiento
 
-- **Estado del lote:** emergencia acumulada, barras azules de flujo diario,
-  curva base, curva calibrada, estado actualizado y banda amarilla 600–800 °Cd.
-  El eje horizontal muestra fechas calendario.
+- **Estado del lote:** dos gráficos paralelos, flujo y acumulado, con referencia
+  local tenue, curva base, curva calibrada y estado actualizado. El flujo inicia
+  en vista semanal y permite pasar a diario. Ambos flujos se expresan en % del
+  total por semana o día; el eje calendario termina el 1 de octubre.
+- **Configuración:** desplegable en el cuerpo principal, sin menú lateral.
+- **Indicadores:** intensidad a siete días relativa al máximo semanal histórico
+  y semáforo de tiempo térmico desde el primer pico, con banda 600–800 °Cd.
 - **Calibración local 2026:** activada por defecto, con interruptor sobre el
   gráfico principal. La selección se conserva durante la sesión y actualiza
   el gráfico, estado, escenarios y exportación.
@@ -78,26 +82,69 @@ Desde el 15/04 aplica un techo del 50 % del máximo previo, con decaimiento
 2–20–30 °C y la banda de manejo 600–800 °Cd. Modelo y meteorología utilizan
 las coordenadas −36,87, −59,89.
 
-Para series parciales se utiliza una referencia **compartida de nueve campañas**
-del clasificador original, excluyendo 2010, 2015, Balcarce y San Pedro. No contiene una campaña
-histórica identificada como Azul: no constituye una validación histórica local.
-El total observado parcial no se supone igual al potencial estacional completo.
-
 Consulte [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md) para la revisión de origen,
 los hashes y la correspondencia científica.
 
-La selección conserva 2008, 2009, 2011, 2012, 2013, 2014, 2023 y 2024
-(archivos identificados sólo por año), y Tres Arroyos 2025. No se atribuyen
-todas estas series a la localidad del gemelo. Los nombres utilizados y
-excluidos se muestran en Trazabilidad y en el perfil de calibración.
-La referencia se recarga en cada ejecución para evitar curvas o columnas
-obsoletas en la caché de Streamlit.
+## Pool histórico exclusivo de Azul 2026
 
-El perfil 2026 y sus diagnósticos se regeneraron con esta selección, conservando
-los conteos, meteorología fija, fechas de corte, ANN y parámetros fisiológicos.
-Aplicación, escenarios y ajuste utilizan los mismos filtros. El cálculo
-conserva su anclaje a la mediana histórica; esta revisión modifica la selección
-de referencias. Los resultados siguientes corresponden a las nueve curvas.
+La única fuente es `data/calibration/azul_2026_counts.csv`: **11 fechas, del
+01/03 al 01/09/2026**, con **8.224 plantas/m²** registradas. El clasificador
+compartido no se lee para construir la referencia, ni siquiera su eje de días.
+Quedan excluidas todas sus curvas: 2008, 2009, 2010, 2011, 2012, 2013, 2014,
+2015, 2023, 2024, Balcarce, San Pedro y Tres Arroyos 2025.
+
+El acumulado observado se divide por el total registrado y se interpola
+linealmente entre visitas. El flujo diario se obtiene por diferencias de ese
+acumulado; la vista semanal lo suma de lunes a domingo, igual que el flujo del
+gemelo. Las barras parciales se rayan e indican los días incluidos. La
+interpolación suaviza los picos y no equivale a un muestreo diario.
+
+El gráfico presenta **Pool histórico · orientativo** con colores tenues sólo
+entre el 1 de marzo y el 1 de septiembre, trasladando mes y día al calendario
+consultado. Fuera de esa ventana no hay referencia observada y no se dibujan
+ceros. En Trazabilidad se puede consultar y descargar la curva utilizada,
+las campañas excluidas y el número de campañas. **P10, mediana y P90 coinciden
+porque sólo hay una campaña; no son intervalos de confianza.**
+
+Para evitar información futura, el total 2026 sólo se habilita desde el
+**01/09/2026**. Si se consulta un corte anterior no existe historia local
+previa: la app lo informa y no calcula porcentajes, remanente ni intensidad.
+Al habilitar la campaña meteorológica 2027 se usará Azul 2026; antes del inicio de su ventana o
+sin señal suficiente tampoco se fuerza un porcentaje usando el último día
+del pronóstico como 100 %. Se conserva el motor fisiológico y la meteorología
+propios de Azul; la actualización meteorológica mantiene su cierre 2026.
+
+Después del 1 de septiembre se mantiene el total registrado como **supuesto
+de normalización** para el gemelo. No se presenta como una cola histórica
+observada ni como evidencia de ausencia de nuevos nacimientos. El 100 % es
+el total de la ventana, no el agotamiento del banco de semillas. Las consultas
+de 2026 con ese total conocido son retrospectivas.
+
+## Intensidad de emergencia y tiempo térmico
+
+La intensidad compara la suma del flujo previsto desde mañana hasta siete
+días después con el máximo de semanas históricas completas de lunes a domingo,
+en la misma escala que las barras y dentro del eje enero–1 de octubre:
+
+- 🔴 **Alta:** >75 % del máximo histórico.
+- 🟠 **Media:** 25–75 %, incluidos ambos límites.
+- 🟡 **Baja:** >0 y <25 % del máximo histórico.
+- 🟢 **Nula:** flujo semanal exactamente cero con siete días válidos.
+
+Si faltan días de pronóstico, se indica ausencia o insuficiencia en gris; no
+se convierte un horizonte incompleto en flujo nulo. Un flujo positivo sin
+máximo histórico se indica sin referencia. Es intensidad relativa, no una
+probabilidad. El indicador utiliza la misma curva histórica del gráfico.
+
+El semáforo térmico clasifica el TT de la fecha consultada sin redondear:
+
+- 🔴 **FUERA DE CONTROL:** >800 °Cd.
+- 🟠 **ULTIMO PLAZO:** >700 y ≤800 °Cd.
+- 🟡 **CONTROL A TIEMPO:** ≥600 y ≤700 °Cd.
+- 🟢 **AUN NO CONTROLAR:** <600 °Cd.
+
+Estos indicadores acompañan el monitoreo y el criterio profesional. No
+modifican la ANN, el decaimiento desde el 15 de abril ni el cálculo térmico.
 
 ## Meteorología y actualización
 
@@ -145,7 +192,7 @@ Cada conteo se compara con la suma simulada sobre su intervalo real, incluidos
 los 29 días entre el 17/06 y el 16/07; no se convierten en semanas artificiales.
 
 La transformación externa `G(F) = logistic(offset + slope × logit(F))`
-ajusta dos parámetros: **offset −0,30; slope 0,675**. Conserva 0 y 1, mantiene
+ajusta dos parámetros: **offset -0,300; slope 0,675**. Conserva 0 y 1, mantiene
 la monotonía y no crea flujos en días bloqueados por el motor. No modifica los
 pesos ANN, el decaimiento ni el tiempo térmico. Cobertura y Wmax son supuestos
 operativos originales: el adjunto no los informa. Sin repeticiones se utiliza
@@ -153,17 +200,20 @@ un piso común de ponderación, no un error de muestreo medido.
 
 | Evaluación | RMSE base | RMSE calibrado |
 |---|---:|---:|
-| Ajuste retrospectivo, 10 intervalos | 548,77 | 372,45 |
-| Evaluación temporal, 4 intervalos posteriores | 203,06 | 315,38 |
+| Ajuste retrospectivo, 10 intervalos | 548.77 | 378.43 |
 
-RMSE en plantas/m² por intervalo. El ajuste retrospectivo mejora un 32,1 %, pero
-**la evaluación temporal empeora un 55,3 %**; mejora sólo uno de cuatro intervalos.
-La interfaz muestra esta limitación junto al gráfico principal y en el detalle
-de calibración. Los cuatro cortes se ajustan sólo con datos disponibles hasta
-cada corte y se evalúa el intervalo siguiente con reanálisis realizado. No son
-pronósticos archivados. El perfil es **experimental** y no demuestra mejora
-predictiva ni transferencia a otros años. Tampoco reduce automáticamente
-la incertidumbre del gemelo.
+RMSE en plantas/m² por intervalo. El perfil fue regenerado el 22/09/2026 con
+la referencia exclusiva. La curva histórica y la calibración utilizan los
+mismos conteos: **este ajuste no demuestra mejora predictiva independiente**.
+
+Los cuatro cortes temporales anteriores al 01/09/2026 no son evaluables con
+este pool porque no existía otra campaña histórica local. Se conserva su
+listado y motivo de exclusión en el perfil JSON; el CSV de evaluación temporal
+queda con encabezados y sin filas. Las métricas anteriores con nueve curvas
+compartidas no se presentan como resultados de esta versión. Es necesario
+evaluar una campaña posterior con datos y emisiones meteorológicas fechadas.
+El perfil sigue siendo experimental y no reduce automáticamente la
+incertidumbre del gemelo.
 
 La capa se aplica al seleccionar Azul, desde el 01/09/2026 y con el mismo motor
 y referencia utilizados al ajustar. Las fechas anteriores no usan un perfil
@@ -171,7 +221,8 @@ que incluye observaciones posteriores. Si se asimilan conteos de 2026, se usa
 la base para evitar reutilizar esa evidencia como calibración y asimilación.
 El motivo aparece junto al interruptor.
 
-Los adjuntos se conservan como referencia de calibración; no se cargan
+El pool histórico y la calibración son capas distintas: desactivar la
+calibración conserva la referencia Azul 2026. Los adjuntos se conservan; no se cargan
 automáticamente en SQLite. Para asimilarlos en un lote, descargue el CSV desde
 **Calibración por sitio** y cárguelo en **Observaciones**.
 
@@ -193,6 +244,6 @@ python -m compileall -q app.py predweem_twin scripts actualizar_clima.py
 ```
 
 Las pruebas comparan el motor con una extracción independiente del original y
-verifican datos adjuntos, perfil reproducible, cortes temporales, calibración,
+verifican datos adjuntos, perfil reproducible, disponibilidad temporal y exclusividad del pool, semáforos, gráficos, calibración,
 asimilación, cobertura, almacenamiento, fuentes y cierre meteorológico.
 Se ejecutan automáticamente en GitHub Actions.

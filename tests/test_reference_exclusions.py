@@ -1,64 +1,88 @@
+"""La referencia y su escala no dependen de ninguna curva compartida."""
 from pathlib import Path
-import pickle
+import shutil
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem
-from predweem_twin.seasonal import load_seasonal_reference
-
+from predweem_twin.flows import historical_weekly_max
+from predweem_twin.seasonal import load_local_seasonal_reference
 
 ROOT = Path(__file__).parents[1]
+COUNTS = Path("data/calibration/azul_2026_counts.csv")
 
 
-def test_shared_reference_excludes_balcarce_san_pedro_2010_and_2015():
-    source = ROOT / "models/modelo_clusters_k3.pkl"
-    reference = load_seasonal_reference(source)
-    with source.open("rb") as handle:
-        payload = pickle.load(handle)
-    expected_names = {
-        "2008.xlsx", "2009.xlsx", "2011.xlsx", "2012.xlsx", "2013.xlsx",
-        "2014.xlsx", "2023.xlsx", "2024.xlsx", "test -emerel tresas 2025.xlsx",
-    }
-    selected = [i for i, name in enumerate(payload["names"]) if name in expected_names]
-    curves = np.asarray(payload["curves_interp"])[selected]
-    progress = np.cumsum(curves, axis=1) / curves.sum(axis=1, keepdims=True)
-    assert len(selected) == 9
-    assert reference.N_Campanas.eq(9).all()
-    assert set(reference.Campanas.iloc[0].split(", ")) == expected_names
-    for quantile, column in [(0.1, "Progreso_P10"), (.5, "Progreso_Mediano"), (.9, "Progreso_P90")]:
-        np.testing.assert_allclose(reference[column], np.quantile(progress, quantile, axis=0))
+@pytest.fixture
+def local_files(tmp_path):
+    (tmp_path / COUNTS).parent.mkdir(parents=True)
+    shutil.copyfile(ROOT / COUNTS, tmp_path / COUNTS)
+    return tmp_path
 
 
-def test_excluded_curves_cannot_change_the_reference(tmp_path):
-    source = ROOT / "models/modelo_clusters_k3.pkl"
-    expected = load_seasonal_reference(source)
-    with source.open("rb") as handle:
-        payload = pickle.load(handle)
-    for i, name in enumerate(payload["names"]):
-        if "balcarce" in name.lower() or "san pedro" in name.lower():
-            payload["curves_interp"][i] = np.arange(len(payload["JD_common"])) * 1000
-            payload["names"][i] = name.upper().replace("SAN PEDRO", "SAN   PEDRO")
-    altered = tmp_path / "altered.pkl"
-    with altered.open("wb") as handle:
-        pickle.dump(payload, handle)
-    result = load_seasonal_reference(altered)
-    pd.testing.assert_frame_equal(result.drop(columns="Campanas_Excluidas"), expected.drop(columns="Campanas_Excluidas"))
+def test_reference_is_exactly_the_local_counts_on_their_calendar():
+    counts = pd.read_csv(ROOT / COUNTS)
+    dates = pd.to_datetime(counts.FECHA)
+    ref = load_local_seasonal_reference(ROOT, "2027-05-05")
+    assert ref.Julian_days.tolist() == list(range(60, 245))
+    expected = np.interp(ref.Julian_days, dates.dt.dayofyear, counts.PLM2.cumsum()/counts.PLM2.sum())
+    for col in ['Progreso_2026', 'Progreso_P10', 'Progreso_Mediano', 'Progreso_P90']:
+        np.testing.assert_allclose(ref[col], expected)
+    assert ref.N_Campanas.eq(1).all()
+    assert ref.Campanas.eq('azul_2026_counts.csv').all()
+    assert ref.Campanas_Anos.eq('2026').all()
+    assert ref.attrs['source_2026']['window_total_plm2'] == 8224
+    assert ref.attrs['source_2026']['sample_count'] == 11
+    excluded = ref.Campanas_Excluidas.iloc[0].lower()
+    for label in ('2008','2009','2010','2011','2012','2013','2014','2015','2023','2024','balcarce','san pedro','tresas'):
+        assert label in excluded
 
 
-def test_missing_curve_names_cannot_bypass_site_filter(tmp_path):
-    path = tmp_path / "unnamed.pkl"
-    with path.open("wb") as handle:
-        pickle.dump({"JD_common": [1, 2], "curves_interp": [[0, 1]]}, handle)
-    with pytest.raises(ValueError, match="nombre por curva"):
-        load_seasonal_reference(path)
+def test_shared_pickle_is_never_read_and_cannot_change_the_pool(local_files):
+    before = load_local_seasonal_reference(local_files, '2027-05-05')
+    (local_files/'models').mkdir()
+    (local_files/'models/modelo_clusters_k3.pkl').write_bytes(b'not a pickle: excluded in its entirety')
+    after = load_local_seasonal_reference(local_files, '2027-05-05')
+    pd.testing.assert_frame_equal(before, after)
+    assert historical_weekly_max(before,'2027-05-05') == historical_weekly_max(after,'2027-05-05')
 
 
-def test_local_selector_remains_exclusive_and_cannot_reinclude_excluded_sites():
-    source = ROOT / "models/modelo_clusters_k3.pkl"
-    local = load_seasonal_reference(source, include_patterns=("tresas",))
-    assert local.N_Campanas.eq(1).all()
-    assert local.Campanas.eq("test -emerel tresas 2025.xlsx").all()
-    with pytest.raises(ValueError, match="no contiene campañas"):
-        load_seasonal_reference(source, include_patterns=("balcarce", "san pedro"))
+def test_density_scaling_does_not_change_relative_historical_flow(local_files):
+    before = load_local_seasonal_reference(local_files)
+    counts = pd.read_csv(local_files/COUNTS)
+    counts.PLM2 *= 100
+    counts.to_csv(local_files/COUNTS,index=False)
+    after = load_local_seasonal_reference(local_files)
+    np.testing.assert_allclose(before.Progreso_Mediano, after.Progreso_Mediano)
+
+
+def test_future_2026_counts_cannot_supply_a_reference_before_closure(local_files):
+    before = load_local_seasonal_reference(local_files,'2026-08-31')
+    assert before.N_Campanas.eq(0).all()
+    assert before.Progreso_Mediano.isna().all()
+    assert not before.attrs['source_2026']['used']
+    counts = pd.read_csv(local_files/COUNTS)
+    counts.loc[len(counts)-1,'PLM2'] = 99999
+    counts.to_csv(local_files/COUNTS,index=False)
+    after = load_local_seasonal_reference(local_files,'2026-08-31')
+    pd.testing.assert_series_equal(before.Progreso_Mediano,after.Progreso_Mediano)
+    assert historical_weekly_max(after,'2026-08-31') is None
+    assert load_local_seasonal_reference(local_files,'2026-09-01').N_Campanas.eq(1).all()
+
+
+@pytest.mark.parametrize('fault',['duplicate','negative','nan','wrong_year','no_initial_zero','missing_column','unsorted'])
+def test_invalid_counts_are_rejected(local_files,fault):
+    counts=pd.read_csv(local_files/COUNTS)
+    if fault=='duplicate':
+        counts.loc[2,'FECHA']=counts.loc[1,'FECHA']
+    elif fault=='wrong_year':
+        counts.loc[0,'FECHA']='2025-03-01'
+    elif fault=='missing_column':
+        counts=counts.drop(columns='PLM2')
+    elif fault=='unsorted':
+        counts=counts.iloc[::-1]
+    else:
+        counts.loc[0 if fault=='no_initial_zero' else 2,'PLM2']={'negative':-1.,'nan':np.nan,'no_initial_zero':1.}[fault]
+    counts.to_csv(local_files/COUNTS,index=False)
+    with pytest.raises(ValueError):
+        load_local_seasonal_reference(local_files)

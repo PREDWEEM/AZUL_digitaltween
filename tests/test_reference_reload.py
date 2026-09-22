@@ -2,7 +2,6 @@
 
 import ast
 from pathlib import Path
-import pickle
 from runpy import run_path
 import shutil
 
@@ -24,20 +23,19 @@ def app_reference_loader(root):
 
 def test_app_reloads_reference_after_data_changes(tmp_path):
     (tmp_path / "predweem_twin").mkdir()
-    (tmp_path / "models").mkdir()
     shutil.copyfile(ROOT / "predweem_twin/seasonal.py", tmp_path / "predweem_twin/seasonal.py")
-    data = tmp_path / "models/modelo_clusters_k3.pkl"
-    shutil.copyfile(ROOT / "models/modelo_clusters_k3.pkl", data)
+    (tmp_path / "data/calibration").mkdir(parents=True)
+    data = tmp_path / "data/calibration/azul_2026_counts.csv"
+    shutil.copyfile(ROOT / "data/calibration/azul_2026_counts.csv", data)
     loader = app_reference_loader(tmp_path)
     before = loader()
-    with data.open("rb") as handle:
-        payload = pickle.load(handle)
-    payload["curves_interp"] = np.ones_like(payload["curves_interp"])
-    with data.open("wb") as handle:
-        pickle.dump(payload, handle)
+    import pandas as pd
+    counts = pd.read_csv(data)
+    counts.loc[len(counts)-1, "PLM2"] = 50000.
+    counts.to_csv(data, index=False)
     after = loader()
     assert not np.allclose(before.Progreso_Mediano, after.Progreso_Mediano)
-    assert after.N_Campanas.eq(9).all()
+    assert after.N_Campanas.eq(1).all()
     assert not after.Campanas.str.contains("balcarce|san pedro", case=False).any()
 
 
@@ -50,7 +48,7 @@ def test_inconsistent_reference_is_rejected_before_simulation(defect):
     else:
         invalid["Campanas"] += ", emrel sp 2025 san pedro.xlsx"
     loader.__globals__["run_path"] = lambda path: {
-        "load_seasonal_reference": lambda *args, **kwargs: invalid
+        "load_local_seasonal_reference": lambda *args, **kwargs: invalid
     }
     with pytest.raises(ValueError, match="referencia estacional"):
         loader()

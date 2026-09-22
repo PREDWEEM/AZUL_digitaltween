@@ -13,7 +13,7 @@ ROOT = Path(__file__).parents[1]
 
 def test_app_uses_current_filters_when_imported_module_is_stale(monkeypatch):
     # Reproduce la tabla antigua: once curvas y sin Campanas_Excluidas.
-    current = seasonal.load_seasonal_reference(ROOT / "models/modelo_clusters_k3.pkl")
+    current = seasonal.load_local_seasonal_reference(ROOT)
     legacy = current.drop(columns="Campanas_Excluidas").copy()
     legacy["N_Campanas"] = 11
     legacy["Campanas"] += ", emererel2025 balcarce.xlsx, emrel sp 2025 san pedro.xlsx"
@@ -22,7 +22,7 @@ def test_app_uses_current_filters_when_imported_module_is_stale(monkeypatch):
     def stale_loader(*args, **kwargs):
         return legacy.copy()
 
-    monkeypatch.setattr(seasonal, "load_seasonal_reference", stale_loader)
+    monkeypatch.setattr(seasonal, "load_local_seasonal_reference", stale_loader)
     # No basta con evitar la excepción: los percentiles también deben ser
     # los de la selección nueva, no los de las once curvas antiguas.
     import pandas as pd
@@ -32,6 +32,6 @@ def test_app_uses_current_filters_when_imported_module_is_stale(monkeypatch):
     for _ in range(2):
         used = next(str(x.value) for x in app.markdown if str(x.value).startswith("Campañas utilizadas:"))
         assert "balcarce" not in used.lower() and "san pedro" not in used.lower()
-        assert any("9 campañas" in str(x.value) for x in app.caption)
+        assert any("1 campaña" in str(x.value) for x in app.caption)
         app.run()
         assert not app.exception, [error.message for error in app.exception]
