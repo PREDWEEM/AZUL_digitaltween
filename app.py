@@ -23,6 +23,7 @@ from predweem_twin.coverage import (
 )
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem
 from predweem_twin.observations import prepare_observations, read_observation_file
+from predweem_twin.onset import onset_alert
 from predweem_twin.scenarios import apply_scenario
 from predweem_twin.seasonal import ReferenceUnavailable
 from predweem_twin.state import (
@@ -105,6 +106,24 @@ def load_open_meteo(latitude, longitude, start_date):
     return fetch_open_meteo(latitude, longitude, start_date)
 
 
+def show_onset_notice(notice):
+    """Presenta el aviso incluso si aún no se puede estimar un porcentaje."""
+    if not notice["enabled"]:
+        return
+    show = st.warning if notice["level"] == "warning" else st.info
+    show(f'**{notice["title"]}**. {notice["message"]}')
+    st.caption(
+        f'Base del aviso: {notice["mode"]}. '
+        "La alerta orienta la vigilancia; no confirma el inicio ni indica aplicar herbicidas. "
+        "El TT continúa desde el primer pico del modelo."
+    )
+    if notice["mode"].startswith("Revisión retrospectiva"):
+        st.caption(
+            "Este aviso usa meteorología histórica o no verificable al corte: "
+            "no demuestra una alerta emitida siete días antes."
+        )
+
+
 
 
 st.markdown(
@@ -152,6 +171,15 @@ with st.expander("Configuración del gemelo", expanded=True):
         coverage_notice = st.empty()
     with parameter_column:
         st.markdown("**Parámetros del gemelo**")
+        onset_alert_enabled = st.toggle(
+            "Alerta preventiva de inicio · 7 días", value=True,
+            key="onset_alert_enabled",
+            help=(
+                "Avisa si el primer pico modelado aparece dentro de los próximos siete días. "
+                "Sirve para organizar recorridas; no adelanta el reloj térmico. "
+                "Funciona también sin conteos de campo."
+            ),
+        )
         w_max = st.number_input(
             "Agua superficial Wmax (mm)", min_value=5.0, max_value=60.0,
             value=18.81, step=0.1, format="%.2f",
@@ -221,14 +249,6 @@ except (OSError, KeyError, TypeError, ValueError) as error:
 reference_campaigns = int(seasonal_reference["N_Campanas"].iloc[0])
 reference_years = seasonal_reference["Campanas_Anos"].iloc[0]
 reference_2026_from = pd.Timestamp(seasonal_reference["Referencia_2026_Desde"].iloc[0])
-if reference_campaigns == 0:
-    st.info(
-        f"Azul 2026 es la única referencia local y su total se conoce desde el "
-        f"{reference_2026_from:%d/%m/%Y}. Para esta fecha anterior no hay una campaña "
-        "histórica disponible: no se calcula un porcentaje, remanente ni intensidad "
-        "usando datos posteriores o curvas de otros sitios. Seleccione una fecha posterior."
-    )
-    st.stop()
 store = load_store()
 coverage_observations = store.coverage_observations(site_id)
 active_coverage = coverage_observations[
@@ -245,6 +265,36 @@ if coverage_mode == "Serie observada" and active_coverage.empty:
         "No hay cobertura observada disponible hasta esta fecha. "
         "Se utiliza el valor de respaldo."
     )
+observations = store.observations(site_id)
+active_observations = observations[
+    (pd.to_datetime(observations["Fecha"], errors="coerce") <= pd.Timestamp(as_of))
+    & (pd.to_datetime(observations["Fecha"], errors="coerce").dt.year == pd.Timestamp(as_of).year)
+].copy()
+
+
+def show_unscaled_onset_notice():
+    """Consulta sólo el inicio fisiológico; no muestra fracciones sin referencia."""
+    if onset_alert_enabled:
+        unscaled = run_predweem(
+            weather, model, parameters, coverage_series=coverage_series_for_model,
+        )
+        notice = onset_alert(unscaled, as_of, observations=active_observations)
+        show_onset_notice(notice)
+        st.caption(
+            "El aviso de inicio usa el motor fisiológico y la meteorología. "
+            "Los porcentajes y los gráficos normalizados requieren una referencia válida."
+        )
+
+
+if reference_campaigns == 0:
+    show_unscaled_onset_notice()
+    st.info(
+        f"Azul 2026 es la única referencia local y su total se conoce desde el "
+        f"{reference_2026_from:%d/%m/%Y}. Para esta fecha anterior no hay una campaña "
+        "histórica disponible: no se calcula un porcentaje, remanente ni intensidad "
+        "usando datos posteriores o curvas de otros sitios. Seleccione una fecha posterior."
+    )
+    st.stop()
 try:
     base_trajectory = run_predweem(
         weather,
@@ -255,6 +305,7 @@ try:
         seasonal_reference=seasonal_reference,
     )
 except ReferenceUnavailable as error:
+    show_unscaled_onset_notice()
     st.info(str(error))
     st.stop()
 coverage_at_cutoff = float(
@@ -262,11 +313,6 @@ coverage_at_cutoff = float(
         base_trajectory["Fecha"] <= pd.Timestamp(as_of), "Cobertura_Rastrojo"
     ].iloc[-1]
 )
-observations = store.observations(site_id)
-active_observations = observations[
-    (pd.to_datetime(observations["Fecha"], errors="coerce") <= pd.Timestamp(as_of))
-    & (pd.to_datetime(observations["Fecha"], errors="coerce").dt.year == pd.Timestamp(as_of).year)
-].copy()
 try:
     calibration_profile = load_site_profile(CALIBRATION_DIR / "azul_2026.json")
 except (ValueError, KeyError, TypeError) as error:
@@ -296,6 +342,10 @@ snapshot = build_twin_snapshot(
     seasonal_reference=seasonal_reference,
 )
 snapshot["calibration"] = calibration_audit
+snapshot["onset_alert"] = onset_alert(
+    base_trajectory, as_of, observations=active_observations,
+    enabled=onset_alert_enabled,
+)
 milestones = milestone_dates(twin_trajectory)
 
 st.markdown(
@@ -360,6 +410,8 @@ if coverage_series_for_model is not None:
         f'**{pd.Timestamp(last_coverage["Fecha"]).strftime("%d/%m/%Y")}**; '
         "los días intermedios se interpolan y luego se mantiene el último valor."
     )
+
+show_onset_notice(snapshot["onset_alert"])
 
 metric_columns = st.columns(5)
 metric_columns[0].metric("Emergencia estimada", f'{snapshot["emergence"]:.0%}')
@@ -463,11 +515,17 @@ with tab_state:
         parameters.tt_limite,
         seasonal_reference=seasonal_reference,
         flow_frequency=flow_frequency,
+        onset_notice=snapshot["onset_alert"],
     )
     daily_column, cumulative_column = st.columns(2)
     with daily_column:
         st.subheader(f"Flujo {flow_frequency.lower()} de emergencia")
         st.plotly_chart(daily_figure, width="stretch", key="daily_emergence_chart")
+        if any(item.name == "initial_monitoring_alert" for item in daily_figure.layout.annotations):
+            st.caption(
+                "Flecha violeta: inicio modelado menos 7 días. Es una fecha estimada de monitoreo; "
+                "no confirma que el aviso se haya emitido ese día."
+            )
         st.caption(
             f"Ambas barras usan la misma escala: % del total por {'semana' if flow_frequency == 'Semanal' else 'día'} "
             "(2 % = +2 puntos porcentuales del acumulado). "
@@ -476,9 +534,17 @@ with tab_state:
         )
         if flow_frequency == "Semanal":
             st.caption(
+                "🔴 Alta: >75 % del máximo histórico · 🟠 Media: 25–75 % · "
+                "🟡 Baja: >0 y <25 % · 🟢 Nula: flujo semanal = 0. "
+                "El histórico usa los mismos colores en tono tenue. "
+                "Las marcas verdes sobre cero indican semanas completas sin flujo del gemelo."
+            )
+            st.caption(
                 "Semanas de lunes a domingo: suma de los flujos diarios. "
-                "Las barras rayadas son parciales; al pasar el cursor se indican los días incluidos "
-                "y si contienen proyección. Compare semanas completas en ambas series."
+                "Las barras parciales son grises y rayadas, sin categoría; "
+                "también se usa gris si falta una referencia para clasificar un flujo positivo. "
+                "El cursor muestra la intensidad, la proporción del máximo y los días incluidos. "
+                "El indicador a 7 días usa mañana–día 7; puede abarcar partes de dos semanas calendario."
             )
     with cumulative_column:
         st.subheader("Emergencia acumulada")
@@ -994,6 +1060,8 @@ with tab_scenarios:
     st.caption("Los escenarios son contrafactuales exploratorios; no modifican el estado guardado del lote.")
 
 with tab_audit:
+    with st.expander("Alerta preventiva de inicio · detalle"):
+        st.json(snapshot["onset_alert"])
     st.subheader("Trazabilidad científica")
     st.write("Campañas utilizadas: " + seasonal_reference["Campanas"].iloc[0])
     st.caption("Campañas excluidas: " + seasonal_reference["Campanas_Excluidas"].iloc[0])

@@ -96,7 +96,7 @@ Quedan excluidas todas sus curvas: 2008, 2009, 2010, 2011, 2012, 2013, 2014,
 El acumulado observado se divide por el total registrado y se interpola
 linealmente entre visitas. El flujo diario se obtiene por diferencias de ese
 acumulado; la vista semanal lo suma de lunes a domingo, igual que el flujo del
-gemelo. Las barras parciales se rayan e indican los días incluidos. La
+gemelo. Las barras parciales se muestran grises y rayadas e indican los días incluidos. La
 interpolación suaviza los picos y no equivale a un muestreo diario.
 
 El gráfico presenta **Pool histórico · orientativo** con colores tenues sólo
@@ -119,6 +119,56 @@ de normalización** para el gemelo. No se presenta como una cola histórica
 observada ni como evidencia de ausencia de nuevos nacimientos. El 100 % es
 el total de la ventana, no el agotamiento del banco de semillas. Las consultas
 de 2026 con ese total conocido son retrospectivas.
+
+## Alerta preventiva de inicio y fecha de monitoreo
+
+Activada por defecto en **Configuración del gemelo**, con opción de desactivarla.
+Consulta la trayectoria base de Azul desde el comienzo de la campaña y avisa
+cuando `Primer_Pico_Habilitado` se activa entre mañana y el séptimo día, inclusive.
+Muestra la fecha modelada y los días de anticipación disponibles para organizar
+una recorrida. Funciona sin conteos de campo. Si hay un conteo positivo del lote
+hasta el corte, informa que ya había emergencia a más tardar en esa visita;
+no lo convierte en el día exacto de inicio.
+
+La alerta también se evalúa si falta una referencia local válida o una escala
+estacional suficiente. En ese caso sólo se consulta el inicio fisiológico:
+no se muestran porcentajes, remanente, intensidad ni gráficos normalizados.
+Se conserva así el aviso de monitoreo sin usar el total futuro de 2026 ni curvas
+de otras localidades. La cobertura observada y los conteos disponibles hasta
+el corte también se respetan en este modo.
+
+Cuando los gráficos están disponibles, el flujo muestra una **flecha vertical
+violeta** sobre el día calendario de la alerta inicial de monitoreo: **inicio
+modelado menos siete días**, con etiqueta `DD/MM/AAAA · estimada`. Se conserva
+en las vistas semanal y diaria, sin moverla al lunes ni al centro de la columna.
+Se recalcula con la información disponible al corte; no acredita que se haya
+emitido un aviso en esa fecha. Sin inicio modelado en el horizonte, con la alerta
+desactivada o fuera del calendario visible, no se dibuja.
+
+La alerta **no desplaza curvas ni el origen del tiempo térmico** y conserva el
+motor, los umbrales y el decaimiento de Azul. Es un aviso visual en la app,
+no una notificación externa. Puede anticipar hasta siete días; no garantiza
+detectar cada inicio. Un horizonte incompleto no descarta emergencia; una señal
+positiva dentro de los días disponibles sí activa vigilancia preventiva.
+Las revisiones con meteorología histórica o emisiones posteriores al corte se
+identifican explícitamente. Se reconoce `FECHA_EMISION` con zona horaria de Azul;
+sin hora de emisión verificable no se afirma disponibilidad anticipada.
+El estado normalizado guarda el detalle en Trazabilidad y en `onset_alert`,
+incluida la fecha estimada (`monitoring_alert_date`).
+
+## Colores del flujo semanal
+
+Las columnas completas se colorean con la misma clasificación del indicador:
+**rojo** (>75 % del máximo semanal histórico), **naranja** (25–75 % inclusive),
+**amarillo** (>0 y <25 %) y **verde** (flujo cero). El denominador proviene
+exclusivamente de Azul 2026, disponible desde el 01/09/2026. La comparación
+determina el color; la altura sigue siendo el porcentaje del total estacional.
+El histórico usa los mismos colores con menor opacidad y conserva su ventana
+del 1 de marzo al 1 de septiembre. Las semanas completas sin flujo del gemelo
+se señalan con marcas verdes en y=0. Una semana parcial, inválida o un flujo
+positivo sin máximo histórico disponible queda sin categoría, en gris.
+El cursor muestra la categoría y el porcentaje del máximo. Las barras abarcan
+lunes–domingo; el indicador a siete días usa mañana–día 7 y puede cruzar semanas.
 
 ## Intensidad de emergencia y tiempo térmico
 
