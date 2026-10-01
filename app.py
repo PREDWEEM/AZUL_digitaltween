@@ -19,7 +19,10 @@ import streamlit as st
 # reruns normales se conservan los mismos módulos y recursos.
 RUNTIME_REVISION = sha256(b"".join(
     path.name.encode("utf-8") + b"\0" + path.read_bytes() + b"\0"
-    for path in sorted((Path(__file__).parent / "predweem_twin").glob("*.py"))
+    for path in sorted([
+        *(Path(__file__).parent / "predweem_twin").glob("*.py"),
+        Path(__file__).parent / "campaign.py",
+    ])
 )).hexdigest()
 
 
@@ -27,6 +30,7 @@ RUNTIME_REVISION = sha256(b"".join(
 def load_runtime(revision):
     """Activa una versión coherente de los módulos locales, en orden de dependencia."""
     importlib.invalidate_caches()
+    importlib.reload(importlib.import_module("campaign"))
     for name in (
         "assimilation", "coverage", "seasonal", "core", "calibration",
         "observations", "flows", "state", "weather", "onset", "charts",
@@ -40,6 +44,7 @@ def load_runtime(revision):
 
 load_runtime(RUNTIME_REVISION)
 
+from campaign import CAMPAIGN_YEARS, campaign_weather_path, default_campaign_year
 from predweem_twin.assimilation import assimilate_observations
 from predweem_twin.charts import annual_historical_reference, trajectory_charts
 from predweem_twin.calibration import (
@@ -161,7 +166,8 @@ st.markdown(
       <div class="eyebrow">PREDWEEM by Guillermo R. Chantre</div>
       <h1>Gemelo Digital · Lolium Azul</h1>
       <p>Estado vivo del lote, actualizado con meteorología y observaciones de campo,
-      con calibración local 2026, proyección a 7 días y simulación de escenarios.</p>
+      con Azul 2026 como referencia histórica local y proyección a 7 días
+      cuando hay meteorología de la campaña seleccionada.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -173,6 +179,11 @@ with st.expander("Configuración del gemelo", expanded=True):
         st.markdown("**Lote y fecha**")
         site_id = st.text_input("Identificador del lote", "Azul-01")
         calibration_site = st.selectbox("Localidad del lote", ["Azul", "Otra localidad"])
+        campaign_year = st.selectbox(
+            "Campaña meteorológica", CAMPAIGN_YEARS,
+            index=CAMPAIGN_YEARS.index(default_campaign_year()), key="campaign_year",
+            help="Azul 2026 es el único histórico. Cada campaña requiere su propia meteorología.",
+        )
         latitude = st.number_input("Latitud", value=-36.8700, format="%.6f")
         longitude = st.number_input("Longitud", value=-59.8900, format="%.6f")
         # La fecha necesita la meteorología; se reserva aquí su lugar visible.
@@ -236,11 +247,29 @@ with st.expander("Configuración del gemelo", expanded=True):
 
 try:
     if source_option == "Open-Meteo":
-        weather = load_open_meteo(latitude, longitude, f"{date.today().year}-01-01")
-    elif source_option == "Cargar archivo" and uploaded_weather is not None:
-        weather = read_weather_file(uploaded_weather)
+        if campaign_year > date.today().year:
+            st.info(
+                f"La campaña {campaign_year} aún no comenzó. Azul 2026 queda conservado "
+                "como único histórico para la próxima campaña; todavía no hay una predicción de 2027."
+            )
+            st.stop()
+        weather = load_open_meteo(latitude, longitude, f"{campaign_year}-01-01")
+    elif source_option == "Cargar archivo":
+        if uploaded_weather is None:
+            st.info(f"Cargue meteorología de {campaign_year}. La referencia histórica sigue siendo Azul 2026.")
+            st.stop()
+        weather = read_weather_file(uploaded_weather, campaign_year=campaign_year)
     else:
-        weather = read_weather_file(BASE / "meteo_daily.csv")
+        weather_path = BASE / campaign_weather_path(campaign_year)
+        if not weather_path.exists():
+            st.info(
+                f"Todavía no hay meteorología de {campaign_year}. Azul 2026 queda conservado "
+                "como único histórico. La actualización automática incorporará la meteorología "
+                "de 2027 cuando comience esa campaña; también podrá cargar un archivo propio. "
+                "Hasta entonces no se calcula una predicción de 2027."
+            )
+            st.stop()
+        weather = read_weather_file(weather_path, campaign_year=campaign_year)
 except Exception as error:
     st.error(f"No fue posible cargar la meteorología: {error}")
     st.stop()
@@ -257,6 +286,7 @@ as_of = date_control.date_input(
     value=default_date,
     min_value=min_date,
     max_value=max_state_date,
+    key=f"state_date_{campaign_year}",
 )
 weather, forecast_metadata = operational_weather_window(
     weather, as_of=as_of, forecast_days=7
@@ -281,8 +311,8 @@ reference_2026_from = pd.Timestamp(seasonal_reference["Referencia_2026_Desde"].i
 store = load_store()
 coverage_observations = store.coverage_observations(site_id)
 active_coverage = coverage_observations[
-    pd.to_datetime(coverage_observations["Fecha"], errors="coerce")
-    <= pd.Timestamp(as_of)
+    (pd.to_datetime(coverage_observations["Fecha"], errors="coerce") <= pd.Timestamp(as_of))
+    & (pd.to_datetime(coverage_observations["Fecha"], errors="coerce").dt.year == campaign_year)
 ].copy()
 coverage_series_for_model = (
     active_coverage
@@ -366,11 +396,15 @@ forecast_end_label = (
     else "sin pronóstico"
 )
 st.caption(
-    "Campaña meteorológica cerrada al 01/10/2026."
+    f'Campaña meteorológica cerrada al {forecast_metadata["campaign_end"]:%d/%m/%Y}.'
     if forecast_metadata["campaign_closed"] else
     f'Meteorología histórica hasta **{pd.Timestamp(as_of).strftime("%d/%m/%Y")}** · '
     f'pronóstico disponible: **{forecast_metadata["forecast_days_available"]}/{forecast_metadata["forecast_days_expected"]} días** '
     f'(hasta {forecast_end_label}).'
+)
+st.caption(
+    f"Campaña seleccionada: {campaign_year} · Histórico local: Azul 2026. "
+    "Los conteos nuevos se asimilan únicamente en su propia campaña."
 )
 if source_option == "ERA5-Land/ERA5 + ECMWF operativa":
     st.caption(

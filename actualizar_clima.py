@@ -17,6 +17,7 @@ transfiere automáticamente ese tramo reciente a ECMWF IFS.
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import time
@@ -27,12 +28,13 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import requests
 
+from campaign import campaign_bounds, campaign_weather_path, default_campaign_year
+
 LAT = -36.87
 LON = -59.89
 TIMEZONE = "America/Argentina/Buenos_Aires"
 ARCHIVO_CSV = Path("meteo_daily.csv")
-FECHA_INICIO = date(2026, 1, 1)
-FECHA_FIN = date(2026, 10, 1)  # Inclusive.
+FECHA_INICIO, FECHA_FIN = campaign_bounds(2026)
 RETARDO_ERA5_OBJETIVO_DIAS = 5
 VENTANA_SONDEO_REANALISIS_DIAS = 21
 REFRESCO_ERA5_DIAS = 7
@@ -328,6 +330,10 @@ def _resolver_corte_reanalisis(
     fecha_objetivo: date,
 ) -> tuple[date, str, str, str]:
     """Elige fuente y último día completo de reanálisis, sin inventar valores."""
+    if fecha_objetivo < FECHA_INICIO:
+        # Al comenzar enero aún no hay reanálisis de esta campaña.
+        # El tramo reciente lo cubre ECMWF, sin consultar rangos invertidos.
+        return FECHA_INICIO - timedelta(days=1), "era5_land", "ERA5_LAND", "REANALISIS"
     candidatos = (
         ("era5_land", "ERA5_LAND", "REANALISIS"),
         ("era5", "ERA5", "REANALISIS_FALLBACK"),
@@ -517,9 +523,18 @@ def _validar_continuidad(df: pd.DataFrame, fecha_final: date) -> None:
         raise RuntimeError("La serie final contiene valores meteorológicos nulos.")
 
 
+def configure_campaign(year: int) -> None:
+    """Mantiene cada campaña en su propio archivo; no reescribe la referencia 2026."""
+    global FECHA_INICIO, FECHA_FIN, ARCHIVO_CSV
+    FECHA_INICIO, FECHA_FIN = campaign_bounds(year)
+    ARCHIVO_CSV = campaign_weather_path(year)
+
+
 def actualizar_meteorologia() -> pd.DataFrame:
     ahora = _ahora_local()
     hoy = ahora.date()
+    if hoy < FECHA_INICIO:
+        raise ValueError(f"La campaña {FECHA_INICIO.year} aún no comenzó; no se genera meteorología futura.")
     fecha_emision = ahora.isoformat(timespec="seconds")
 
     fecha_objetivo_reanalisis = hoy - timedelta(days=RETARDO_ERA5_OBJETIVO_DIAS)
@@ -592,6 +607,7 @@ def actualizar_meteorologia() -> pd.DataFrame:
     _validar_continuidad(df_final, fecha_final)
 
     # Escritura atómica: solo reemplaza el archivo después de validar todo.
+    ARCHIVO_CSV.parent.mkdir(parents=True, exist_ok=True)
     temporal = ARCHIVO_CSV.with_suffix(".csv.tmp")
     salida = df_final.copy()
     salida["Fecha"] = salida["Fecha"].dt.strftime("%Y-%m-%d")
@@ -606,6 +622,10 @@ def actualizar_meteorologia() -> pd.DataFrame:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--year", type=int, choices=(2026, 2027), default=default_campaign_year())
+    args = parser.parse_args()
+    configure_campaign(args.year)
     try:
         actualizar_meteorologia()
     except Exception as exc:

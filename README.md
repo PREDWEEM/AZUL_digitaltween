@@ -109,10 +109,30 @@ porque sólo hay una campaña; no son intervalos de confianza.**
 Para evitar información futura, el total 2026 sólo se habilita desde el
 **01/09/2026**. Si se consulta un corte anterior no existe historia local
 previa: la app lo informa y no calcula porcentajes, remanente ni intensidad.
-Al habilitar la campaña meteorológica 2027 se usará Azul 2026; antes del inicio de su ventana o
+Para la campaña meteorológica 2027 se usará Azul 2026; antes del inicio de su ventana o
 sin señal suficiente tampoco se fuerza un porcentaje usando el último día
 del pronóstico como 100 %. Se conserva el motor fisiológico y la meteorología
-propios de Azul; la actualización meteorológica mantiene su cierre 2026.
+propios de Azul. Cada campaña meteorológica cierra el 1 de octubre de su año.
+
+### Preparación para 2027
+
+**2027 todavía no comenzó al preparar esta actualización (01/10/2026).** Azul 2026
+se conserva como único histórico, sin renombrar sus fechas ni convertir su
+meteorología en datos de 2027. La aplicación mantiene 2026 como campaña
+predeterminada durante 2026. El selector permite preparar la consulta de 2027;
+si falta su meteorología, se informa la ausencia y no se genera una predicción.
+
+Al comenzar 2027, el valor predeterminado y la tarea meteorológica programada
+cambian a esa campaña. `meteo_daily.csv` conserva 2026 y
+`data/meteo_2027.csv` recibirá la meteorología propia de 2027. También se
+puede elegir Open-Meteo o cargar un archivo con fechas de la campaña seleccionada.
+El horizonte operativo es de siete días, limitado al **01/10/2027**.
+Los conteos y la cobertura observada de otras campañas no se asimilan como
+observaciones nuevas de 2027. La curva histórica orientativa de los dos
+gráficos sigue derivándose exclusivamente de los conteos originales de Azul 2026.
+
+Esta preparación habilita el uso futuro; no constituye una validación predictiva
+de 2027 ni genera datos meteorológicos o conteos de esa campaña.
 
 Después del 1 de septiembre se mantiene el total registrado como **supuesto
 de normalización** para el gemelo. No se presenta como una cola histórica
@@ -216,11 +236,15 @@ Al consultar un corte pasado se utiliza la meteorología actualmente archivada,
 no el pronóstico emitido en aquel corte.
 
 El workflow `actualizar_clima.yml` actualiza a las 07:30 y 15:30 de Argentina y
-admite ejecución manual. El pronóstico se recorta al **01/10/2026 inclusive**.
+admite ejecución manual. Selecciona la campaña por el año calendario de Argentina
+(2026 o 2027) y guarda cada año por separado. El pronóstico se recorta al
+**1 de octubre del año seleccionado, inclusive**.
 Después del cierre sólo se completan los datos históricos hasta esa fecha.
 El actualizador recupera huecos, valida la continuidad y reemplaza el CSV de
 forma atómica. La precipitación faltante no se inventa ni se arrastra.
 Open-Meteo y un archivo aportado son opciones adicionales en la interfaz.
+Para una ejecución explícita: `python actualizar_clima.py --year 2027`.
+El comando rechaza una campaña que aún no comenzó, antes de realizar descargas.
 
 ## Calibración local 2026
 
