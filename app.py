@@ -272,42 +272,21 @@ active_observations = observations[
 ].copy()
 
 
-def show_unscaled_onset_notice():
-    """Consulta sólo el inicio fisiológico; no muestra fracciones sin referencia."""
-    if onset_alert_enabled:
-        unscaled = run_predweem(
-            weather, model, parameters, coverage_series=coverage_series_for_model,
-        )
-        notice = onset_alert(unscaled, as_of, observations=active_observations)
-        show_onset_notice(notice)
-        st.caption(
-            "El aviso de inicio usa el motor fisiológico y la meteorología. "
-            "Los porcentajes y los gráficos normalizados requieren una referencia válida."
-        )
-
-
 if reference_campaigns == 0:
-    show_unscaled_onset_notice()
     st.info(
         f"Azul 2026 es la única referencia local y su total se conoce desde el "
         f"{reference_2026_from:%d/%m/%Y}. Para esta fecha anterior no hay una campaña "
-        "histórica disponible: no se calcula un porcentaje, remanente ni intensidad "
-        "usando datos posteriores o curvas de otros sitios. Seleccione una fecha posterior."
+        "histórica disponible: el porcentaje, el remanente y la intensidad quedan "
+        "pendientes. Puede registrar conteos y consultar el inicio y el tiempo térmico."
     )
-    st.stop()
-try:
-    base_trajectory = run_predweem(
-        weather,
-        model,
-        parameters,
-        coverage_series=coverage_series_for_model,
-        normalization_as_of=as_of,
-        seasonal_reference=seasonal_reference,
-    )
-except ReferenceUnavailable as error:
-    show_unscaled_onset_notice()
-    st.info(str(error))
-    st.stop()
+base_trajectory = run_predweem(
+    weather,
+    model,
+    parameters,
+    coverage_series=coverage_series_for_model,
+    normalization_as_of=as_of,
+    seasonal_reference=seasonal_reference,
+)
 coverage_at_cutoff = float(
     base_trajectory.loc[
         base_trajectory["Fecha"] <= pd.Timestamp(as_of), "Cobertura_Rastrojo"
@@ -371,7 +350,7 @@ if source_option == "ERA5-Land/ERA5 + ECMWF operativa":
         "tipo de dato y fecha de emisión; no corresponde a observaciones de estación."
     )
 st.caption(
-    "Referencia local Azul 2026 · orientativa (1 campaña). Se excluyen todas las "
+    f"Referencia local Azul 2026 · orientativa ({reference_campaigns} campaña disponible). Se excluyen todas las "
     "curvas del clasificador compartido, incluidas las identificadas sólo por año, "
     "Balcarce, San Pedro y Tres Arroyos 2025."
 )
@@ -381,7 +360,7 @@ st.caption(
     "Una sola campaña no permite estimar variabilidad entre años. El 100 % representa "
     "el total de esa ventana, no el agotamiento del banco de semillas."
 )
-if pd.Timestamp(as_of).year == 2026:
+if pd.Timestamp(as_of).year == 2026 and reference_campaigns > 0:
     st.caption(
         "Revisión retrospectiva: la referencia usa el total conocido al cierre de 2026. "
         "No constituye una validación predictiva independiente."
@@ -414,8 +393,15 @@ if coverage_series_for_model is not None:
 show_onset_notice(snapshot["onset_alert"])
 
 metric_columns = st.columns(5)
-metric_columns[0].metric("Emergencia estimada", f'{snapshot["emergence"]:.0%}')
-metric_columns[1].metric("Emergencia remanente", f'{snapshot["remaining"]:.0%}')
+if not snapshot["normalization_available"]:
+    st.info(
+        "Porcentaje aún no estimable: falta señal acumulada o una referencia histórica "
+        "suficiente hasta la fecha del estado. El acumulado, el remanente y el flujo "
+        "porcentual quedan pendientes. Los conteos se conservan en plantas/m²; "
+        "la alerta de inicio y el tiempo térmico continúan disponibles."
+    )
+metric_columns[0].metric("Emergencia estimada", f'{snapshot["emergence"]:.0%}' if snapshot["emergence"] is not None else "Aún no estimable")
+metric_columns[1].metric("Emergencia remanente", f'{snapshot["remaining"]:.0%}' if snapshot["remaining"] is not None else "Aún no estimable")
 intensity_lights = {"Alta": "🔴", "Media": "🟠", "Baja": "🟡", "Nula": "🟢"}
 intensity_level = snapshot["intensity_7d"]
 intensity_light = intensity_lights.get(intensity_level, "⚪")
@@ -423,6 +409,7 @@ metric_columns[2].metric(
     "Intensidad de emergencia · 7 días", f"{intensity_light} {intensity_level}",
     (f'{snapshot["intensity_7d_ratio"]:.1%} del máximo histórico'
      if snapshot["intensity_7d_ratio"] is not None
+     else "Normalización pendiente" if not snapshot["normalization_available"]
      else f'{snapshot["forecast_days_7d"]}/7 días disponibles'),
     delta_color="off",
     help=(
@@ -475,6 +462,11 @@ tab_state, tab_observations, tab_calibration, tab_scenarios, tab_audit = st.tabs
 )
 
 with tab_state:
+    if not snapshot["normalization_available"] and not active_observations.empty:
+        observed_flows = pd.to_numeric(active_observations["Flujo_observado_PLM2"], errors="coerce")
+        if observed_flows.notna().any():
+            st.metric("Conteos acumulados registrados", f"{observed_flows.sum():.1f} plantas/m²")
+            st.caption("Conteos conservados. La actualización del porcentaje queda pendiente hasta disponer de normalización.")
     if snapshot["seasonal_potential_plm2"] is not None:
         field_metrics = st.columns(3)
         field_metrics[0].metric(
@@ -577,11 +569,17 @@ with tab_state:
             )
         else:
             cohort = "No detectada en el horizonte"
-        st.write(
-            f'El gemelo estima **{snapshot["emergence"]:.0%}** de la emergencia potencial y '
-            f'**{snapshot["remaining"]:.0%}** remanente. La próxima cohorte probable es **{cohort}**. '
-            f'La termoinhibición está **{"activa" if snapshot["thermoinhibited"] else "inactiva"}**.'
-        )
+        if snapshot["normalization_available"]:
+            st.write(
+                f'El gemelo estima **{snapshot["emergence"]:.0%}** de la emergencia potencial y '
+                f'**{snapshot["remaining"]:.0%}** remanente. La próxima cohorte probable es **{cohort}**. '
+                f'La termoinhibición está **{"activa" if snapshot["thermoinhibited"] else "inactiva"}**.'
+            )
+        else:
+            st.write(
+                "**Acumulado y remanente aún no estimables.** La curva histórica es orientativa. "
+                "Consulte la alerta de inicio y el TT para organizar el seguimiento del lote."
+            )
         st.info(
             "La salida es soporte para decisión. Debe interpretarse junto con el monitoreo "
             "del lote y el criterio del profesional responsable."
@@ -678,11 +676,13 @@ with tab_observations:
                 )
                 summary_columns[1].metric(
                     "Potencial estacional estimado",
-                    f'{import_metadata["potencial_estacional_plm2"]:.1f} plantas/m²',
+                    (f'{import_metadata["potencial_estacional_plm2"]:.1f} plantas/m²'
+                     if import_metadata["potencial_estacional_plm2"] is not None else "Aún no estimable"),
                 )
                 summary_columns[2].metric(
                     "Progreso simulado en última fecha",
-                    f'{import_metadata["progreso_modelo_ultima_fecha"]:.0%}',
+                    (f'{import_metadata["progreso_modelo_ultima_fecha"]:.0%}'
+                     if import_metadata["progreso_modelo_ultima_fecha"] is not None else "Aún no estimable"),
                 )
                 if has_repetitions:
                     summary_columns[3].metric(
@@ -1132,7 +1132,8 @@ with tab_audit:
         "MODO_ASIMILACION", "ULTIMA_OBSERVACION", "Cobertura_Rastrojo",
         "Cobertura_Modo", "Cobertura_Observada", "Ke_Suelo",
         "Modulador_Termico_Cobertura",
-        "Normalizacion_Modo", "Total_EMERREL_Referencia",
+        "Normalizacion_Modo", "Normalizacion_Disponible", "Normalizacion_Motivo",
+        "Total_EMERREL_Referencia", "Fecha_Ancla_Normalizacion",
         "Progreso_Estacional_P10", "Progreso_Estacional_Referencia",
         "Progreso_Estacional_P90",
         "Termoinhibida", "TT_DESDE_PICO", "EMERREL_ANTES_DECAIMIENTO",

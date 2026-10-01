@@ -94,42 +94,56 @@ def reference_progress(reference: pd.DataFrame, julian_days):
     )
 
 
-def partial_season_normalization(trajectory: pd.DataFrame, as_of, reference: pd.DataFrame):
-    """Ancla a Azul 2026 sin recurrir al total de una meteorología parcial.
+def partial_season_normalization(
+    trajectory: pd.DataFrame,
+    as_of,
+    reference: pd.DataFrame,
+) -> tuple[float | None, dict]:
+    """Estima el total de señal estacional sin usar el fin del pronóstico.
 
-    La única referencia no existía antes de su último conteo. Si no hay un
-    ancla local conocida, se informa que el porcentaje no es estimable en vez
-    de normalizar por el último día y convertirlo artificialmente en 100 %.
+    La señal acumulada de PREDWEEM se ancla, en la fecha del estado, al progreso
+    mediano de campañas históricas, utilizando sólo fechas hasta el corte.
+    Sin señal o progreso histórico suficiente, el porcentaje no es estimable.
     """
     cutoff = pd.Timestamp(as_of).tz_localize(None).normalize()
+    if pd.isna(cutoff):
+        raise ValueError("Fecha de corte de normalización inválida.")
     available_from = pd.Timestamp(reference["Referencia_2026_Desde"].iloc[0])
     if cutoff < available_from or not reference["N_Campanas"].eq(1).all():
-        raise ReferenceUnavailable(
-            f"No hay referencia histórica local anterior: Azul 2026 está disponible desde {available_from:%d/%m/%Y}."
-        )
-    candidates = trajectory.index[trajectory["Fecha"] <= cutoff].tolist()
-    if not candidates:
-        raise ReferenceUnavailable("No hay meteorología hasta la fecha consultada.")
-    anchor_idx = candidates[-1]
-    p10, median, p90 = reference_progress(reference, trajectory["Julian_days"].to_numpy(float))
-    raw_cumulative = trajectory["EMERAC"].to_numpy(float)
-    if not np.isfinite(median[anchor_idx]):
-        raise ReferenceUnavailable(
-            "La referencia Azul 2026 comienza el 1 de marzo. Antes de esa ventana no se "
-            "puede estimar un porcentaje ni remanente con este único histórico."
-        )
-    if raw_cumulative[anchor_idx] <= 1e-12 or median[anchor_idx] <= .01:
-        raise ReferenceUnavailable(
-            "Aún no hay señal y progreso histórico suficientes para estimar el porcentaje "
-            "estacional. No se normaliza por el final del pronóstico."
-        )
-    total = float(raw_cumulative[anchor_idx] / median[anchor_idx])
-    if not np.isfinite(total) or total <= 1e-12:
-        raise ReferenceUnavailable("No hay una escala estacional local válida.")
-    return total, {
+        return None, {
+            "mode": "porcentaje aún no estimable",
+            "reason": f"No hay referencia histórica local anterior: Azul 2026 está disponible desde {available_from:%d/%m/%Y}.",
+        }
+    dates = pd.to_datetime(trajectory["Fecha"]).dt.tz_localize(None).dt.normalize()
+    past = trajectory.loc[dates <= cutoff].sort_values("Fecha")
+    if past.empty:
+        return None, {"mode": "porcentaje aún no estimable", "reason": "Sin historia hasta el corte."}
+    anchor = past.iloc[-1]
+    p10, median, p90 = reference_progress(
+        reference, [float(anchor["Julian_days"])]
+    )
+    if not np.isfinite(median[0]):
+        return None, {
+            "mode": "porcentaje aún no estimable", "anchor_date": anchor["Fecha"],
+            "reason": "La referencia Azul 2026 comienza el 1 de marzo; antes de esa ventana el porcentaje es desconocido.",
+        }
+    raw_cumulative = float(anchor["EMERAC"])
+    metadata = {
+        "mode": "porcentaje aún no estimable",
+        "anchor_date": anchor["Fecha"],
+        "reference_progress": float(median[0]),
+    }
+    if (not np.isfinite([raw_cumulative, median[0]]).all()
+            or raw_cumulative <= 1e-12 or median[0] <= 0.01):
+        return None, {**metadata, "reason": "Sin señal acumulada o progreso histórico mayor al 1% hasta el corte."}
+
+    seasonal_total = float(raw_cumulative / median[0])
+    if not np.isfinite(seasonal_total) or seasonal_total <= 1e-12:
+        return None, {**metadata, "reason": "Denominador estacional no válido."}
+    return seasonal_total, {
+        **metadata,
         "mode": "referencia estacional histórica",
-        "anchor_date": trajectory.at[anchor_idx, "Fecha"],
-        "reference_progress": float(median[anchor_idx]),
-        "reference_p10": float(p10[anchor_idx]), "reference_p90": float(p90[anchor_idx]),
-        "seasonal_signal_total": total,
+        "reference_p10": float(p10[0]),
+        "reference_p90": float(p90[0]),
+        "seasonal_signal_total": seasonal_total,
     }

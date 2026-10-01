@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from predweem_twin.core import ModelParameters, PracticalANNModel, run_predweem
-from predweem_twin.seasonal import load_local_seasonal_reference, ReferenceUnavailable
+from predweem_twin.seasonal import load_local_seasonal_reference
 
 ROOT=Path(__file__).parents[1]
 
@@ -33,10 +33,14 @@ def test_future_partial_run_anchors_to_azul_without_forcing_last_day_to_one():
 
 @pytest.mark.parametrize('cutoff',['2026-05-05','2026-08-31'])
 def test_historical_normalization_rejects_future_reference_even_if_preloaded(cutoff):
-    with pytest.raises(ReferenceUnavailable,match='disponible desde'):
-        run(cutoff,load_local_seasonal_reference(ROOT))
+    result = run(cutoff, load_local_seasonal_reference(ROOT))
+    assert not result.Normalizacion_Disponible.any()
+    assert result.EMERAC_NORMALIZADA.isna().all()
+    assert result.Normalizacion_Motivo.str.contains('disponible desde').all()
 
 
 def test_unknown_early_window_does_not_fall_back_to_total_available_weather():
-    with pytest.raises(ReferenceUnavailable,match='comienza el 1 de marzo'):
-        run('2027-02-20')
+    result = run('2027-02-20')
+    assert not result.Normalizacion_Disponible.any()
+    assert result.EMERAC_NORMALIZADA.isna().all()
+    assert result.Normalizacion_Motivo.str.contains('comienza el 1 de marzo').all()

@@ -59,8 +59,18 @@ def test_alert_arrow_toggle_and_early_monitoring_without_future_reference():
                for element in app.warning)
     assert any("Revisión retrospectiva" in element.value for element in app.caption)
     assert any("no hay una campaña" in element.value for element in app.info)
-    assert not app.metric and not app.get("plotly_chart")
+    assert len(app.get("plotly_chart")) >= 2
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Emergencia estimada"] == "Aún no estimable"
+    assert metrics["Emergencia remanente"] == "Aún no estimable"
+    assert "Aún no estimable" in metrics["Intensidad de emergencia · 7 días"]
+    assert "nan" not in str(metrics).lower()
     app.toggle(key="onset_alert_enabled").set_value(False).run()
     checked()
     assert not any("Alerta preventiva" in element.value for element in app.warning)
-    assert not app.metric and not app.get("plotly_chart")
+    assert len(app.get("plotly_chart")) >= 2
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Emergencia estimada"] == "Aún no estimable"
+    assert metrics["Emergencia remanente"] == "Aún no estimable"
+    assert "Aún no estimable" in metrics["Intensidad de emergencia · 7 días"]
+    assert "nan" not in str(metrics).lower()
